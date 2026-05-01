@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DPG Pay Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-cyan-950 to-emerald-950 text-slate-100">
+  <main class="mx-auto max-w-5xl px-6 py-12">
+    <header class="rounded-2xl border border-white/20 bg-black/30 p-8 shadow-2xl backdrop-blur">
+      <p class="text-xs uppercase tracking-[0.25em] text-cyan-300">DPG Pay Portal</p>
+      <h1 class="mt-2 text-4xl font-bold">Payment Tracking And Confirmation</h1>
+      <p class="mt-4 max-w-2xl text-slate-300">
+        This is the primary payer portal. Enter your payment request ID below to open your payment page and continue confirmation.
+      </p>
+      <form method="post" action="/portal/open" class="mt-6 flex flex-wrap gap-3">
+        {{.CSRFField}}
+        <input name="payment_id" placeholder="Paste payment UUID" required class="w-full max-w-md rounded-lg border border-cyan-300/40 bg-slate-950 px-4 py-2 text-slate-100 outline-none ring-cyan-400 focus:ring" />
+        <button class="rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300">Open Payment</button>
+      </form>
+      <div class="mt-4 flex flex-wrap gap-3 text-sm">
+        <a href="/" class="rounded-lg border border-cyan-300 px-4 py-2 font-semibold text-cyan-200 hover:bg-cyan-500/10">Go To Admin</a>
+        <a href="/admin/login" class="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-200 hover:bg-slate-500/10">Admin Login</a>
+      </div>
+    </header>
+
+    <section class="mt-8 grid gap-4 md:grid-cols-2">
+      <article class="rounded-xl border border-white/20 bg-white/5 p-5">
+        <h2 class="text-lg font-semibold">Portal Endpoints</h2>
+        <p class="mt-2 text-sm text-slate-300">Use links provided in your payment notification:</p>
+        <ul class="mt-3 space-y-2 text-sm text-cyan-200">
+          <li>/pay/{uuid}</li>
+          <li>/pay/{uuid}/status</li>
+          <li>/pay/{uuid}/success</li>
+          <li>/pay/{uuid}/failed</li>
+        </ul>
+      </article>
+      <article class="rounded-xl border border-white/20 bg-white/5 p-5">
+        <h2 class="text-lg font-semibold">Admin Navigation</h2>
+        <p class="mt-2 text-sm text-slate-300">Central admin links are grouped under /admin:</p>
+        <ul class="mt-3 space-y-2 text-sm text-cyan-200">
+          <li>/admin (settings hub)</li>
+          <li>/admin/dashboard</li>
+          <li>/admin/settlements</li>
+          <li>/admin/wallet/OPERATING</li>
+          <li>/admin/audit</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

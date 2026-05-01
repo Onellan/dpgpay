@@ -1,0 +1,13 @@
+<div class="space-y-2">
+  {{range .LiveEntries}}
+  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <span class="font-medium">{{index $.WalletTypeByID .WalletID}} · {{.Direction}} · {{.EntryType}}</span>
+      <span class="text-slate-500">{{fmtDateTime .CreatedAt}}</span>
+    </div>
+    <div class="mt-1 text-slate-700">{{.ReferenceID}} · {{.AmountCents}} cents</div>
+  </div>
+  {{else}}
+  <p class="text-sm text-slate-500">No ledger entries yet.</p>
+  {{end}}
+</div>

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DPG Pay Admin Login</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-cyan-950 to-emerald-950 text-slate-100">
+  <div class="mx-auto flex min-h-screen max-w-md items-center px-6">
+    <div class="w-full rounded-2xl border border-white/20 bg-black/30 p-8 shadow-2xl backdrop-blur">
+      <h1 class="text-3xl font-semibold tracking-tight">DPG Pay Admin</h1>
+      <p class="mt-2 text-sm text-slate-300">Sign in to manage payment requests and settlements.</p>
+      {{if .Error}}<p class="mt-4 rounded bg-rose-900/60 px-3 py-2 text-sm text-rose-200">{{.Error}}</p>{{end}}
+      <form method="post" action="/admin/login" class="mt-6 space-y-4">
+        {{.CSRFField}}
+        <div>
+          <label class="mb-1 block text-sm text-slate-200">Username</label>
+          <input name="username" type="text" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 outline-none ring-cyan-400 focus:ring" />
+        </div>
+        <div>
+          <label class="mb-1 block text-sm text-slate-200">Password</label>
+          <input name="password" type="password" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 outline-none ring-cyan-400 focus:ring" />
+        </div>
+        <button class="w-full rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300">Sign in</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

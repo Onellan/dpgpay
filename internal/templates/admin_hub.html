@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DPG Pay Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <main class="mx-auto max-w-5xl px-4 py-8">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-xs uppercase tracking-[0.2em] text-cyan-700">Admin Control Center</p>
+          <h1 class="mt-1 text-3xl font-bold">DPG Pay Administration</h1>
+          <p class="mt-2 text-sm text-slate-600">Use this page as your central navigation point for settings and operations.</p>
+        </div>
+        <a href="/portal" class="rounded border border-slate-300 px-3 py-2 text-sm">Back to Portal</a>
+      </div>
+
+      <section class="mt-6 grid gap-4 md:grid-cols-2">
+        <a href="/admin/dashboard" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Operations Dashboard</h2>
+          <p class="mt-1 text-sm text-slate-600">Balances, live transactions, payment request creation, and payment queue status.</p>
+        </a>
+
+        <a href="/admin/settlements" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Settlement Settings</h2>
+          <p class="mt-1 text-sm text-slate-600">Run settlements and inspect settlement history runs and outcomes.</p>
+        </a>
+
+        <a href="/admin/wallet/OPERATING" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Wallet Settings</h2>
+          <p class="mt-1 text-sm text-slate-600">Review OPERATING, ESCROW, and FEE wallet ledger histories.</p>
+        </a>
+
+        <a href="/admin/audit" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Audit & Security</h2>
+          <p class="mt-1 text-sm text-slate-600">Inspect login events, status transitions, and ledger-write audit trails.</p>
+        </a>
+
+        <a href="/admin/reconciliation" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Reconciliation Report</h2>
+          <p class="mt-1 text-sm text-slate-600">Validate wallet invariants and compare payment lifecycle totals by status.</p>
+        </a>
+
+        <a href="/admin/webhooks" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Webhook Deliveries</h2>
+          <p class="mt-1 text-sm text-slate-600">Track outbound integration events, retries, and delivery failures.</p>
+        </a>
+
+        <a href="/admin/settings" class="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-cyan-400 hover:bg-cyan-50">
+          <h2 class="text-lg font-semibold">Business & Platform Settings</h2>
+          <p class="mt-1 text-sm text-slate-600">Configure branding, notifications, fee rules, locale, templates, operators, and EFT rails.</p>
+        </a>
+      </section>
+
+      <form method="post" action="/admin/logout" class="mt-6">
+        {{.CSRFField}}
+        <button class="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Logout</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

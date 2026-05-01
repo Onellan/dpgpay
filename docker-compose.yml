@@ -1,0 +1,17 @@
+services:
+  dpg-pay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dpg-pay
+    user: "0:0"
+    env_file:
+      - .env
+    ports:
+      - "0.0.0.0:18231:18231"
+    volumes:
+      - dpgpay_data:/data
+    restart: unless-stopped
+
+volumes:
+  dpgpay_data:

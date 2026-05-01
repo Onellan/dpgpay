@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DPG Pay Webhook Deliveries</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <main class="mx-auto max-w-7xl px-4 py-6">
+    <a href="/admin" class="text-sm text-cyan-700 underline">Back to admin home</a>
+    <h1 class="mt-2 text-2xl font-bold">Webhook delivery outbox</h1>
+    <p class="mt-1 text-sm text-slate-600">Newest events first. Failed rows retry with exponential backoff.</p>
+
+    <div class="mt-4 overflow-auto rounded border border-slate-200 bg-white">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 text-xs uppercase text-slate-500">
+            <th class="px-3 py-2">ID</th>
+            <th class="px-3 py-2">Event</th>
+            <th class="px-3 py-2">Reference</th>
+            <th class="px-3 py-2">Status</th>
+            <th class="px-3 py-2">Attempts</th>
+            <th class="px-3 py-2">Next Attempt</th>
+            <th class="px-3 py-2">Sent At</th>
+            <th class="px-3 py-2">Last Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Rows}}
+          <tr class="border-b border-slate-100 align-top">
+            <td class="px-3 py-2">{{.ID}}</td>
+            <td class="px-3 py-2">{{.EventType}}</td>
+            <td class="px-3 py-2">{{.ReferenceID}}</td>
+            <td class="px-3 py-2">{{.Status}}</td>
+            <td class="px-3 py-2">{{.Attempts}}</td>
+            <td class="px-3 py-2">{{fmtDateTime .NextAttemptAt}}</td>
+            <td class="px-3 py-2">{{fmtDateTimePtr .SentAt}}</td>
+            <td class="px-3 py-2"><pre class="whitespace-pre-wrap text-xs">{{.LastError}}</pre></td>
+          </tr>
+          {{else}}
+          <tr><td colspan="8" class="px-3 py-4 text-slate-500">No webhook events queued yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
+</html>
