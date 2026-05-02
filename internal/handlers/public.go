@@ -13,7 +13,7 @@ type homePageData struct {
 }
 
 func (a *App) HomePage(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "home.html", homePageData{BaseURL: a.BaseURL, CSRFField: csrf.TemplateField(r)})
+	a.render(w, "home.html", homePageData{BaseURL: a.requestBaseURL(r), CSRFField: csrf.TemplateField(r)})
 }
 
 func (a *App) PortalOpenPayment(w http.ResponseWriter, r *http.Request) {

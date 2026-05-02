@@ -57,11 +57,13 @@ nano .env
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD_BCRYPT=<bcrypt-hash-of-password>
 ADMIN_EMAIL=admin@example.com
-BASE_URL=http://localhost:18231
+BASE_URL=
 DB_PATH=/data/dpgpay.db
 PORT=18231
 CSRF_AUTH_KEY=<generate-random-key>
 ```
+
+When `BASE_URL` is blank, the app derives it from the request host and forwarded proto headers, which is usually the right default in production.
 
 #### 3. Start the service
 ```bash
@@ -84,32 +86,14 @@ docker compose logs -f dpg-pay
 
 **Best for:** Quick deployments using published images
 
-#### 1. Create docker-compose.yml
-```yaml
-version: '3.8'
+#### 1. Use the checked-in compose file
 
-services:
-  dpg-pay:
-    image: ghcr.io/<owner>/dpgpay:latest
-    container_name: dpg-pay
-    user: "0:0"
-    env_file:
-      - .env
-    ports:
-      - "0.0.0.0:18231:18231"
-    volumes:
-      - dpgpay_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:18231/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+The repository already includes [docker-compose.image.yml](c:\Users\onell\OneDrive\Documents\MyGitProjects\dpgpay\docker-compose.image.yml) for the GHCR image.
 
-volumes:
-  dpgpay_data:
-```
+It includes the same env bootstrap behavior as the source-build compose file:
+- auto-creates `.env` if missing
+- copies from `.env.example` when present
+- otherwise generates `.env` from built-in defaults
 
 #### 2. Authenticate to GHCR (if repository is private)
 ```bash
@@ -118,7 +102,7 @@ echo $CR_PAT | docker login ghcr.io -u <username> --password-stdin
 
 #### 3. Pull and run
 ```bash
-docker compose up -d
+docker compose -f docker-compose.image.yml up -d
 ```
 
 ---
@@ -127,7 +111,7 @@ docker compose up -d
 
 **Best for:** Production deployments on AWS
 
-#### Prerequisites
+#### ECS Prerequisites
 - AWS account with ECR (Elastic Container Registry)
 - ECS cluster configured
 - AWS CLI installed
@@ -327,8 +311,9 @@ kubectl get pods -n dpgpay
 ## Environment Configuration
 
 ### Essential Variables
+
 | Variable | Description | Example |
-|----------|-------------|---------|
+| --- | --- | --- |
 | `ADMIN_USERNAME` | Admin login username | `admin` |
 | `ADMIN_PASSWORD_BCRYPT` | Bcrypt hash of admin password | `$2a$12$...` |
 | `ADMIN_EMAIL` | Admin email address | `admin@example.com` |
@@ -338,8 +323,9 @@ kubectl get pods -n dpgpay
 | `CSRF_AUTH_KEY` | CSRF token authentication key (32+ bytes) | Generate with: `openssl rand -hex 32` |
 
 ### Optional Variables
+
 | Variable | Description | Default |
-|----------|-------------|---------|
+| --- | --- | --- |
 | `EFT_SIMULATION_MODE` | Enable EFT payment simulation | `true` |
 | `EFT_ACCOUNT_NAME` | EFT beneficiary account name | `` |
 | `EFT_BANK_NAME` | EFT beneficiary bank name | `` |
@@ -391,13 +377,13 @@ kubectl port-forward svc/dpgpay 8080:80 -n dpgpay
 
 ## Updating to Latest Version
 
-### Docker Compose
+### Update Docker Compose
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-### Kubernetes
+### Update Kubernetes
 ```bash
 kubectl rollout restart deployment/dpgpay -n dpgpay
 ```

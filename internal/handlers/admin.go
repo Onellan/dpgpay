@@ -123,7 +123,7 @@ func (a *App) AdminDashboard(w http.ResponseWriter, r *http.Request) {
 		LiveEntries:     live,
 		WalletTypeByID:  walletTypeByID,
 		CSRFField:       csrf.TemplateField(r),
-		ShareURLBuilder: a.BaseURL,
+		ShareURLBuilder: a.requestBaseURL(r),
 	})
 }
 

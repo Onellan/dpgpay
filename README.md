@@ -21,7 +21,7 @@ DPG Pay is a self-hosted, internal ledger-based payment processor. It accepts pa
 
 ## Project structure
 
-```
+```text
 /dpg-pay
   /cmd/server/main.go
   /internal
@@ -45,10 +45,21 @@ DPG Pay is a self-hosted, internal ledger-based payment processor. It accepts pa
 
 ## Setup
 
-1. Build and run:
+There are two Docker Compose variants:
+
+- `docker-compose.yml`: builds the app locally from source.
+- `docker-compose.image.yml`: pulls the prebuilt image from GitHub Container Registry.
+
+1. Start with the local source build:
 
 ```bash
 docker compose up -d --build
+```
+
+Or start with the prebuilt image:
+
+```bash
+docker compose -f docker-compose.image.yml up -d
 ```
 
 This now auto-creates `.env` from `.env.example` on first run if it does not exist.
@@ -57,6 +68,7 @@ If `.env.example` is missing, Docker Compose generates `.env` from built-in safe
 2. (Optional) Update `.env` values after first boot.
 
 Defaults are runnable out of the box. You can change `ADMIN_EMAIL` and any other settings later in `.env` and restart.
+If `BASE_URL` is left blank, DPG Pay derives it from the incoming request host, which is safer for prebuilt-image production deployments.
 
 3. Access DPG Pay:
 

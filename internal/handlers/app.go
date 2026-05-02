@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -72,6 +73,45 @@ func (a *App) render(w http.ResponseWriter, name string, data any) {
 	if err := a.Templates.ExecuteTemplate(w, name, data); err != nil {
 		log.Printf("template %s render failed: %v", name, err)
 		http.Error(w, "template rendering error", http.StatusInternalServerError)
+	}
+}
+
+func (a *App) requestBaseURL(r *http.Request) string {
+	if !isLocalBaseURL(a.BaseURL) {
+		return a.BaseURL
+	}
+
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https") {
+		scheme = "https"
+	}
+
+	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = strings.TrimSpace(r.Host)
+	}
+	if host == "" {
+		return a.BaseURL
+	}
+
+	return scheme + "://" + host
+}
+
+func isLocalBaseURL(baseURL string) bool {
+	trimmed := strings.TrimSpace(baseURL)
+	if trimmed == "" {
+		return true
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return true
+	}
+	hostname := strings.ToLower(parsed.Hostname())
+	switch hostname {
+	case "", "localhost", "127.0.0.1", "0.0.0.0":
+		return true
+	default:
+		return false
 	}
 }
 

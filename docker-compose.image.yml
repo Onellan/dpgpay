@@ -45,9 +45,7 @@ services:
     depends_on:
       env-bootstrap:
         condition: service_completed_successfully
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/onellan/dpgpay:latest
     container_name: dpg-pay
     user: 0:0
     env_file:

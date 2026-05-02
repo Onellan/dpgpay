@@ -78,7 +78,7 @@ func (a *App) PayPage(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "pay_page.html", payPageData{
 		Payment:          payment,
 		CSRFField:        csrf.TemplateField(r),
-		BaseURL:          a.BaseURL,
+		BaseURL:          a.requestBaseURL(r),
 		EFTAccountName:   eftAccountName,
 		EFTBankName:      eftBankName,
 		EFTAccountNumber: eftAccountNumber,
@@ -235,8 +235,6 @@ func (a *App) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payment.Status = models.PaymentStatusAwaitingTransfer
-	payment.BankName = bankName
-	payment.BankReference = bankRef
 
 	_ = a.Store.CreateAuditLog(r.Context(), "PAYMENT_CONFIRMED", payment.PayerEmail, payment.ID, auditDetail)
 	_ = a.Store.EnqueueWebhook(r.Context(), "payment_request.confirmed", payment.ID, map[string]any{
