@@ -108,13 +108,16 @@ func (s *Store) CreatePaymentRequest(ctx context.Context, p PaymentRequest) (Pay
 		}
 	}
 
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO payment_requests(
-			id, reference, idempotency_key, payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, created_at, updated_at
+	err := WithWriteRetry(ctx, 5, func() error {
+		_, execErr := s.db.ExecContext(ctx, `
+			INSERT INTO payment_requests(
+				id, reference, idempotency_key, payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, created_at, updated_at
+			)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+			p.ID, p.Reference, nullableString(idempotencyKey), p.PayerName, p.PayerEmail, p.AmountCents, p.Currency, p.Description, p.DueDate.UTC(), p.Status,
 		)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-		p.ID, p.Reference, nullableString(idempotencyKey), p.PayerName, p.PayerEmail, p.AmountCents, p.Currency, p.Description, p.DueDate.UTC(), p.Status,
-	)
+		return execErr
+	})
 	if err != nil {
 		if idempotencyKey != "" && strings.Contains(strings.ToLower(err.Error()), "idempotency") {
 			return s.GetPaymentRequestByIdempotencyKey(ctx, idempotencyKey)
@@ -126,7 +129,7 @@ func (s *Store) CreatePaymentRequest(ctx context.Context, p PaymentRequest) (Pay
 
 func (s *Store) GetPaymentRequestByIdempotencyKey(ctx context.Context, idempotencyKey string) (PaymentRequest, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at
+		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at, processed_at
 		FROM payment_requests
 		WHERE idempotency_key = ?`, idempotencyKey)
 	return scanPaymentRequest(row)
@@ -134,7 +137,7 @@ func (s *Store) GetPaymentRequestByIdempotencyKey(ctx context.Context, idempoten
 
 func (s *Store) GetPaymentRequestByID(ctx context.Context, id string) (PaymentRequest, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at
+		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at, processed_at
 		FROM payment_requests
 		WHERE id = ?`, id)
 	return scanPaymentRequest(row)
@@ -145,7 +148,7 @@ func (s *Store) ListPaymentRequests(ctx context.Context, status string, limit in
 		limit = 100
 	}
 	query := `
-		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at
+		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at, processed_at
 		FROM payment_requests`
 	var args []any
 	status = strings.TrimSpace(strings.ToUpper(status))
@@ -170,7 +173,7 @@ func (s *Store) ListPaymentRequests(ctx context.Context, status string, limit in
 		var p PaymentRequest
 		if err := rows.Scan(
 			&p.ID, &p.Reference, &p.IdempotencyKey, &p.PayerName, &p.PayerEmail, &p.AmountCents, &p.Currency, &p.Description,
-			&p.DueDate, &p.Status, &p.RetryCount, &p.BankName, &p.BankReference, &p.CreatedAt, &p.UpdatedAt,
+			&p.DueDate, &p.Status, &p.RetryCount, &p.BankName, &p.BankReference, &p.CreatedAt, &p.UpdatedAt, &p.ProcessedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -197,40 +200,96 @@ func (s *Store) SetPaymentAwaitingTransfer(ctx context.Context, id, bankName, ba
 }
 
 func (s *Store) ConfirmPaymentIntent(ctx context.Context, id, bankName, bankReference string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	var amountCents int64
-	if err := tx.QueryRowContext(ctx, `
-		SELECT amount_cents
-		FROM payment_requests
-		WHERE id = ? AND status = ?`, id, PaymentStatusPending).Scan(&amountCents); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("payment request not in PENDING state")
+	return WithWriteRetry(ctx, 5, func() error {
+		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+		if err != nil {
+			return err
 		}
-		return err
-	}
+		defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE payment_requests
-		SET status = ?, bank_name = ?, bank_reference = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ? AND status = ?`,
-		PaymentStatusAwaitingTransfer, bankName, bankReference, id, PaymentStatusPending,
-	); err != nil {
-		return err
-	}
+		var amountCents int64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT amount_cents
+			FROM payment_requests
+			WHERE id = ? AND status = ?`, id, PaymentStatusPending).Scan(&amountCents); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errors.New("payment request not in PENDING state")
+			}
+			return err
+		}
 
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE wallets
-		SET pending_cents = pending_cents + ?, updated_at = CURRENT_TIMESTAMP
-		WHERE type = ?`, amountCents, WalletTypeEscrow); err != nil {
-		return err
-	}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE payment_requests
+			SET status = ?, bank_name = ?, bank_reference = ?, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ? AND status = ?`,
+			PaymentStatusAwaitingTransfer, bankName, bankReference, id, PaymentStatusPending,
+		); err != nil {
+			return err
+		}
 
-	return tx.Commit()
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE wallets
+			SET pending_cents = pending_cents + ?, updated_at = CURRENT_TIMESTAMP
+			WHERE type = ?`, amountCents, WalletTypeEscrow); err != nil {
+			return err
+		}
+
+		return tx.Commit()
+	})
+}
+
+func (s *Store) MarkPaymentSettledIdempotent(ctx context.Context, id string) (bool, error) {
+	var changed bool
+	err := WithWriteRetry(ctx, 5, func() error {
+		res, err := s.db.ExecContext(ctx, `
+			UPDATE payment_requests
+			SET status = ?, processed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ? AND status = ? AND processed_at IS NULL`,
+			PaymentStatusSettled, id, PaymentStatusAwaitingTransfer,
+		)
+		if err != nil {
+			return err
+		}
+		affected, _ := res.RowsAffected()
+		changed = affected > 0
+		return nil
+	})
+	return changed, err
+}
+
+func (s *Store) ExpireAwaitingTransfer(ctx context.Context, id string, amountCents int64) error {
+	return WithWriteRetry(ctx, 5, func() error {
+		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		res, err := tx.ExecContext(ctx, `
+			UPDATE payment_requests
+			SET status = ?, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ? AND status = ?`, PaymentStatusExpired, id, PaymentStatusAwaitingTransfer)
+		if err != nil {
+			return err
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			return sql.ErrNoRows
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE wallets
+			SET pending_cents = CASE
+				WHEN pending_cents >= ? THEN pending_cents - ?
+				ELSE 0
+			END,
+			updated_at = CURRENT_TIMESTAMP
+			WHERE type = ?`, amountCents, amountCents, WalletTypeEscrow); err != nil {
+			return err
+		}
+
+		return tx.Commit()
+	})
 }
 
 func (s *Store) UpdatePaymentStatus(ctx context.Context, id, fromStatus, toStatus string) error {
@@ -274,9 +333,9 @@ func (s *Store) GetAwaitingTransfers(ctx context.Context, limit int) ([]PaymentR
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at
+		SELECT id, reference, COALESCE(idempotency_key, ''), payer_name, payer_email, amount_cents, currency, description, due_date, status, retry_count, COALESCE(bank_name, ''), COALESCE(bank_reference, ''), created_at, updated_at, processed_at
 		FROM payment_requests
-		WHERE status = ?
+		WHERE status = ? AND processed_at IS NULL
 		ORDER BY updated_at ASC
 		LIMIT ?`, PaymentStatusAwaitingTransfer, limit)
 	if err != nil {
@@ -289,7 +348,7 @@ func (s *Store) GetAwaitingTransfers(ctx context.Context, limit int) ([]PaymentR
 		var p PaymentRequest
 		if err := rows.Scan(
 			&p.ID, &p.Reference, &p.IdempotencyKey, &p.PayerName, &p.PayerEmail, &p.AmountCents, &p.Currency, &p.Description,
-			&p.DueDate, &p.Status, &p.RetryCount, &p.BankName, &p.BankReference, &p.CreatedAt, &p.UpdatedAt,
+			&p.DueDate, &p.Status, &p.RetryCount, &p.BankName, &p.BankReference, &p.CreatedAt, &p.UpdatedAt, &p.ProcessedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -575,8 +634,28 @@ func (s *Store) ReconciliationReport(ctx context.Context) (ReconciliationReport,
 	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(pending_cents, 0) FROM wallets WHERE type = ?`, WalletTypeEscrow).Scan(&report.EscrowPendingCents); err != nil {
 		return report, err
 	}
-	report.LedgerBalanceInvariant = report.NetWalletBalanceCents == 0
+	debit, credit, err := s.LedgerTotals(ctx)
+	if err != nil {
+		return report, err
+	}
+	report.LedgerDebitCents = debit
+	report.LedgerCreditCents = credit
+	report.LedgerBalanceInvariant = report.NetWalletBalanceCents == 0 && report.LedgerDebitCents == report.LedgerCreditCents
 	return report, nil
+}
+
+func (s *Store) LedgerTotals(ctx context.Context) (int64, int64, error) {
+	var debit int64
+	var credit int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN direction = 'DR' THEN amount_cents ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN direction = 'CR' THEN amount_cents ELSE 0 END), 0)
+		FROM ledger_entries`).Scan(&debit, &credit)
+	if err != nil {
+		return 0, 0, err
+	}
+	return debit, credit, nil
 }
 
 func (s *Store) EnqueueWebhook(ctx context.Context, eventType, referenceID string, payload map[string]any) error {
@@ -867,7 +946,7 @@ func scanPaymentRequest(row scanner) (PaymentRequest, error) {
 	var p PaymentRequest
 	if err := row.Scan(
 		&p.ID, &p.Reference, &p.IdempotencyKey, &p.PayerName, &p.PayerEmail, &p.AmountCents, &p.Currency, &p.Description,
-		&p.DueDate, &p.Status, &p.RetryCount, &p.BankName, &p.BankReference, &p.CreatedAt, &p.UpdatedAt,
+		&p.DueDate, &p.Status, &p.RetryCount, &p.BankName, &p.BankReference, &p.CreatedAt, &p.UpdatedAt, &p.ProcessedAt,
 	); err != nil {
 		return PaymentRequest{}, err
 	}

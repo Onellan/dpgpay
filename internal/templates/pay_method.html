@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pay {{.Payment.Reference}} | DPG Pay</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script defer src="/static/js/pay-method.js"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-emerald-50 to-cyan-50 text-slate-900">
+  <main class="mx-auto max-w-2xl px-4 py-8">
+    <div class="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+      <a href="/pay/{{.Payment.ID}}" class="text-sm text-cyan-700 underline">Back to payment options</a>
+      <h1 class="mt-2 text-3xl font-bold">{{if eq .Method "eft"}}Pay via Bank EFT{{else}}Pay via Card{{end}}</h1>
+      <p class="mt-1 text-sm text-slate-600">Reference {{.Payment.Reference}} · {{fmtCents .Payment.AmountCents .Payment.Currency}}</p>
+
+      {{if ne .Payment.Status "PENDING"}}
+      <div class="mt-6 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+        This payment request is in {{.Payment.Status}} state.
+        <a href="/pay/{{.Payment.ID}}/status" class="ml-2 text-cyan-700 underline">Check live status</a>
+      </div>
+      {{else}}
+      <form method="post" action="/pay/{{.Payment.ID}}/confirm" class="mt-6 space-y-4">
+        {{.CSRFField}}
+        <input type="hidden" name="payment_method" value="{{.Method}}" />
+
+        {{if eq .Method "eft"}}
+        <section class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 space-y-3">
+          <h2 class="text-lg font-semibold text-cyan-900">EFT Beneficiary</h2>
+          {{if .EFTConfigured}}
+          <dl class="grid gap-2 rounded-lg bg-white p-3 text-sm">
+            <div class="flex justify-between"><dt class="text-slate-500">Bank</dt><dd class="font-medium">{{.EFTBankName}}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Account name</dt><dd class="font-medium">{{.EFTAccountName}}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Account number</dt><dd class="font-medium">{{.EFTAccountNumber}}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Branch code</dt><dd class="font-medium">{{if .EFTBranchCode}}{{.EFTBranchCode}}{{else}}N/A{{end}}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Payment reference</dt><dd class="font-medium">{{.Payment.Reference}}</dd></div>
+          </dl>
+          {{else}}
+          <p class="text-sm text-amber-700">EFT beneficiary details are not configured yet.</p>
+          {{end}}
+
+          <div>
+            <label class="mb-1 block text-sm">Your bank name</label>
+            <input name="eft_bank_name" required class="w-full rounded border border-slate-300 px-3 py-2" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm">Your account holder name</label>
+            <input name="eft_account_holder" required class="w-full rounded border border-slate-300 px-3 py-2" />
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-sm">Your account number</label>
+              <input name="eft_account_number" inputmode="numeric" pattern="[0-9]*" data-numeric-only data-account-number required class="w-full rounded border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm">Your branch code</label>
+              <input name="eft_branch_code" inputmode="numeric" pattern="[0-9]*" data-numeric-only data-branch-code required class="w-full rounded border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm">Your EFT transfer reference</label>
+            <input name="bank_reference" required class="w-full rounded border border-slate-300 px-3 py-2" />
+          </div>
+        </section>
+        {{else}}
+        <section class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 space-y-3">
+          <h2 class="text-lg font-semibold text-cyan-900">Card Details</h2>
+          <p class="text-sm text-cyan-800">This is a payment simulation. Do not enter real production card details.</p>
+          <div>
+            <label class="mb-1 block text-sm">Name on card</label>
+            <input name="card_name" required class="w-full rounded border border-slate-300 px-3 py-2" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm">Card number</label>
+            <input name="card_number" inputmode="numeric" pattern="[0-9 ]*" data-card-number placeholder="4242 4242 4242 4242" required class="w-full rounded border border-slate-300 px-3 py-2" />
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-sm">Expiry month (MM)</label>
+              <select name="card_expiry_month" required class="w-full rounded border border-slate-300 px-3 py-2">
+                <option value="">MM</option>
+                <option value="01">01</option>
+                <option value="02">02</option>
+                <option value="03">03</option>
+                <option value="04">04</option>
+                <option value="05">05</option>
+                <option value="06">06</option>
+                <option value="07">07</option>
+                <option value="08">08</option>
+                <option value="09">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </div>
+            <div>
+              <label class="mb-1 block text-sm">Expiry year (YYYY)</label>
+              <select name="card_expiry_year" required class="w-full rounded border border-slate-300 px-3 py-2">
+                <option value="">YYYY</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+                <option value="2028">2028</option>
+                <option value="2029">2029</option>
+                <option value="2030">2030</option>
+                <option value="2031">2031</option>
+                <option value="2032">2032</option>
+                <option value="2033">2033</option>
+                <option value="2034">2034</option>
+                <option value="2035">2035</option>
+              </select>
+            </div>
+          </div>
+          <div>
+              <label class="mb-1 block text-sm">CVV</label>
+              <input name="card_cvv" inputmode="numeric" pattern="[0-9]*" maxlength="4" data-numeric-only required class="w-full rounded border border-slate-300 px-3 py-2" />
+            </div>
+        </section>
+        {{end}}
+
+        <button class="w-full rounded bg-emerald-600 px-4 py-2 font-semibold text-white">Pay now</button>
+      </form>
+      {{end}}
+    </div>
+  </main>
+</body>
+</html>

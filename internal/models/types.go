@@ -68,6 +68,7 @@ type PaymentRequest struct {
 	BankReference  string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	ProcessedAt    *time.Time
 }
 
 type Settlement struct {
@@ -107,6 +108,8 @@ type ReconciliationReport struct {
 	LedgerBalanceInvariant bool
 	NetWalletBalanceCents  int64
 	EscrowPendingCents     int64
+	LedgerDebitCents       int64
+	LedgerCreditCents      int64
 }
 
 type WebhookOutboxItem struct {

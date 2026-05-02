@@ -140,6 +140,7 @@ func main() {
 	r.Route("/pay", func(pr chi.Router) {
 		pr.Use(payLimiter.Middleware)
 		pr.Get("/{id}", app.PayPage)
+		pr.Get("/{id}/method/{method}", app.PayMethodPage)
 		pr.Post("/{id}/confirm", app.ConfirmPayment)
 		pr.Get("/{id}/status", app.PayStatusPage)
 		pr.Get("/{id}/status/fragment", app.PayStatusFragment)
@@ -157,9 +158,12 @@ func main() {
 		ar.Post("/operators/{operatorID}/password", app.AdminResetOperatorPassword)
 		ar.Get("/dashboard", app.AdminDashboard)
 		ar.Get("/reconciliation", app.AdminReconciliationPage)
+		ar.Post("/ledger/validate", app.AdminValidateLedger)
 		ar.Get("/webhooks", app.AdminWebhooksPage)
 		ar.Get("/feed", app.AdminLiveFeed)
 		ar.Post("/payment-requests", app.AdminCreatePaymentRequest)
+		ar.Get("/payment-requests/{paymentID}/refund", app.AdminRefundPaymentPage)
+		ar.Post("/payment-requests/{paymentID}/refund", app.AdminRefundPaymentRequest)
 		ar.Get("/wallet/{walletType}", app.AdminWalletDetail)
 		ar.Get("/settlements", app.AdminSettlementsPage)
 		ar.Post("/settlements/run", app.AdminTriggerSettlement)
@@ -171,11 +175,15 @@ func main() {
 
 	routeCtx, cancelRoutes := context.WithCancel(context.Background())
 	defer cancelRoutes()
+	if err := ledgerSvc.ValidateIntegrity(routeCtx); err != nil {
+		log.Printf("startup ledger integrity check failed: %v", err)
+		_ = store.CreateAuditLog(routeCtx, "LEDGER_INVARIANT_BROKEN", "system", "", fmt.Sprintf(`{"error":%q}`, err.Error()))
+	}
 	go transferEngine.Start(routeCtx)
 	go webhookDispatcher.Start(routeCtx)
 	go cleanupSessions(routeCtx, store)
 	go expireOverduePayments(routeCtx, store)
-	go validateLedgerInvariant(routeCtx, store)
+	go validateLedgerInvariant(routeCtx, store, ledgerSvc)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
 	srv := &http.Server{
@@ -313,7 +321,7 @@ func expireOverduePayments(ctx context.Context, store *models.Store) {
 	}
 }
 
-func validateLedgerInvariant(ctx context.Context, store *models.Store) {
+func validateLedgerInvariant(ctx context.Context, store *models.Store, ledgerSvc *ledger.Service) {
 	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 	for {
@@ -321,14 +329,9 @@ func validateLedgerInvariant(ctx context.Context, store *models.Store) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			report, err := store.ReconciliationReport(ctx)
-			if err != nil {
+			if err := ledgerSvc.ValidateIntegrity(ctx); err != nil {
 				log.Printf("ledger invariant check failed: %v", err)
-				continue
-			}
-			if !report.LedgerBalanceInvariant {
-				detail := fmt.Sprintf(`{"net_wallet_balance_cents":%d}`, report.NetWalletBalanceCents)
-				_ = store.CreateAuditLog(ctx, "LEDGER_INVARIANT_BROKEN", "system", "", detail)
+				_ = store.CreateAuditLog(ctx, "LEDGER_INVARIANT_BROKEN", "system", "", fmt.Sprintf(`{"error":%q}`, err.Error()))
 			}
 		}
 	}

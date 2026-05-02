@@ -22,39 +22,14 @@
       </dl>
 
       {{if eq .Payment.Status "PENDING"}}
-      <section class="mt-6 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
-        <h2 class="text-lg font-semibold text-cyan-900">Pay via EFT</h2>
-        {{if .EFTConfigured}}
-        <p class="mt-1 text-sm text-cyan-800">Use your banking app/portal and pay to the beneficiary below. Use the payment reference exactly.</p>
-        <dl class="mt-3 grid gap-2 rounded-lg bg-white p-3 text-sm">
-          <div class="flex justify-between"><dt class="text-slate-500">Bank</dt><dd class="font-medium">{{.EFTBankName}}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Account name</dt><dd class="font-medium">{{.EFTAccountName}}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Account number</dt><dd class="font-medium">{{.EFTAccountNumber}}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Branch code</dt><dd class="font-medium">{{if .EFTBranchCode}}{{.EFTBranchCode}}{{else}}N/A{{end}}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Amount</dt><dd class="font-medium">{{fmtCents .Payment.AmountCents .Payment.Currency}}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Payment reference</dt><dd class="font-medium">{{.Payment.Reference}}</dd></div>
-        </dl>
-        {{else}}
-        <p class="mt-1 text-sm text-amber-700">EFT beneficiary details are not configured yet. Please contact support/admin to complete this payment.</p>
-        {{end}}
+      <section class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h2 class="text-lg font-semibold">Choose how you want to pay</h2>
+        <p class="mt-1 text-sm text-slate-600">Select a method to continue to the next payment step.</p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <a href="/pay/{{.Payment.ID}}/method/eft" class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-center font-semibold text-emerald-900 hover:bg-emerald-100">Pay via Bank EFT</a>
+          <a href="/pay/{{.Payment.ID}}/method/card" class="rounded-lg border border-cyan-300 bg-cyan-50 px-4 py-3 text-center font-semibold text-cyan-900 hover:bg-cyan-100">Pay via Card</a>
+        </div>
       </section>
-
-      <form method="post" action="/pay/{{.Payment.ID}}/confirm" class="mt-6 space-y-3">
-        {{.CSRFField}}
-        <div>
-          <label class="mb-1 block text-sm">Your bank name</label>
-          <input name="bank_name" required class="w-full rounded border border-slate-300 px-3 py-2" />
-        </div>
-        <div>
-          <label class="mb-1 block text-sm">Your EFT transfer reference</label>
-          <input name="bank_reference" required class="w-full rounded border border-slate-300 px-3 py-2" />
-        </div>
-        <label class="flex items-start gap-2 text-sm text-slate-700">
-          <input type="checkbox" name="eft_confirmed" class="mt-0.5" required />
-          <span>I confirm I have completed the EFT transfer using the beneficiary details and payment reference above.</span>
-        </label>
-        <button class="w-full rounded bg-emerald-600 px-4 py-2 font-semibold text-white">Confirm payment</button>
-      </form>
       {{else}}
       <div class="mt-6 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
         This payment request is in {{.Payment.Status}} state.

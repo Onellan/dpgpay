@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"dpg-pay/internal/middleware"
 	"dpg-pay/internal/models"
+	"dpg-pay/internal/observability"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -50,7 +52,8 @@ type auditPageData struct {
 }
 
 type reconciliationPageData struct {
-	Report models.ReconciliationReport
+	Report    models.ReconciliationReport
+	CSRFField any
 }
 
 type webhookPageData struct {
@@ -63,6 +66,11 @@ type adminSettingsPageData struct {
 	CSRFField any
 	Message   string
 	Error     string
+}
+
+type adminRefundPageData struct {
+	Payment   models.PaymentRequest
+	CSRFField any
 }
 
 func (a *App) AdminHub(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +167,14 @@ func (a *App) AdminCreatePaymentRequest(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid due date", http.StatusBadRequest)
 		return
 	}
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if dueDate.Before(todayStart) {
+		http.Error(w, "due date cannot be in the past", http.StatusBadRequest)
+		return
+	}
+	// Treat due date as inclusive for the full day.
+	dueDate = time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 23, 59, 59, 0, now.Location())
 	reference, err := a.Store.GeneratePaymentReference(r.Context(), time.Now())
 	if err != nil {
 		http.Error(w, "failed to generate reference", http.StatusInternalServerError)
@@ -166,16 +182,15 @@ func (a *App) AdminCreatePaymentRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	p, err := a.Store.CreatePaymentRequest(r.Context(), models.PaymentRequest{
-		ID:             uuid.NewString(),
-		Reference:      reference,
-		IdempotencyKey: strings.TrimSpace(r.FormValue("idempotency_key")),
-		PayerName:      strings.TrimSpace(r.FormValue("payer_name")),
-		PayerEmail:     strings.TrimSpace(r.FormValue("payer_email")),
-		AmountCents:    amountCents,
-		Currency:       strings.ToUpper(strings.TrimSpace(r.FormValue("currency"))),
-		Description:    strings.TrimSpace(r.FormValue("description")),
-		DueDate:        dueDate,
-		Status:         models.PaymentStatusPending,
+		ID:          uuid.NewString(),
+		Reference:   reference,
+		PayerName:   strings.TrimSpace(r.FormValue("payer_name")),
+		PayerEmail:  strings.TrimSpace(r.FormValue("payer_email")),
+		AmountCents: amountCents,
+		Currency:    strings.ToUpper(strings.TrimSpace(r.FormValue("currency"))),
+		Description: strings.TrimSpace(r.FormValue("description")),
+		DueDate:     dueDate,
+		Status:      models.PaymentStatusPending,
 	})
 	if p.Currency == "" {
 		p.Currency = "ZAR"
@@ -195,12 +210,18 @@ func (a *App) AdminCreatePaymentRequest(w http.ResponseWriter, r *http.Request) 
 	if adminActor == "" {
 		adminActor = "admin"
 	}
-	_ = a.Store.CreateAuditLog(r.Context(), "PAYMENT_REQUEST_CREATED", adminActor, p.ID, fmt.Sprintf(`{"reference":%q,"idempotency_key":%q,"remote_addr":%q,"user_agent":%q}`,
+	_ = a.Store.CreateAuditLog(r.Context(), "PAYMENT_REQUEST_CREATED", adminActor, p.ID, fmt.Sprintf(`{"reference":%q,"remote_addr":%q,"user_agent":%q}`,
 		p.Reference,
-		p.IdempotencyKey,
 		r.RemoteAddr,
 		r.UserAgent(),
 	))
+	observability.LogEvent("payment_created", map[string]any{
+		"payment_id":       p.ID,
+		"reference":        p.Reference,
+		"amount_cents":     p.AmountCents,
+		"currency":         p.Currency,
+		"created_by_admin": adminActor,
+	})
 
 	if r.Header.Get("HX-Request") == "true" {
 		a.render(w, "partials_payment_row.html", p)
@@ -274,7 +295,83 @@ func (a *App) AdminReconciliationPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.render(w, "admin_reconciliation.html", reconciliationPageData{Report: report})
+	a.render(w, "admin_reconciliation.html", reconciliationPageData{Report: report, CSRFField: csrf.TemplateField(r)})
+}
+
+func (a *App) AdminValidateLedger(w http.ResponseWriter, r *http.Request) {
+	if err := a.Ledger.ValidateIntegrity(r.Context()); err != nil {
+		_ = a.Store.CreateAuditLog(r.Context(), "LEDGER_VALIDATION_FAILED", middleware.AdminUserFromContext(r.Context()), "", fmt.Sprintf(`{"error":%q}`, err.Error()))
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	_ = a.Store.CreateAuditLog(r.Context(), "LEDGER_VALIDATION_OK", middleware.AdminUserFromContext(r.Context()), "", `{"source":"admin_endpoint"}`)
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", "/admin/reconciliation")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/admin/reconciliation", http.StatusFound)
+}
+
+func (a *App) AdminRefundPaymentRequest(w http.ResponseWriter, r *http.Request) {
+	paymentID := strings.TrimSpace(chi.URLParam(r, "paymentID"))
+	if paymentID == "" {
+		http.Error(w, "payment id is required", http.StatusBadRequest)
+		return
+	}
+
+	payment, err := a.Store.GetPaymentRequestByID(r.Context(), paymentID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "payment not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if payment.Status != models.PaymentStatusSettled {
+		http.Error(w, "only settled payments can be refunded", http.StatusConflict)
+		return
+	}
+
+	if err := a.Ledger.RefundSettledPayment(r.Context(), payment.ID, payment.AmountCents); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	actor := middleware.AdminUserFromContext(r.Context())
+	if actor == "" {
+		actor = "admin"
+	}
+	_ = a.Store.CreateAuditLog(r.Context(), "PAYMENT_REFUNDED", actor, payment.ID, fmt.Sprintf(`{"reference":%q,"amount_cents":%d}`, payment.Reference, payment.AmountCents))
+	_ = a.Store.EnqueueWebhook(r.Context(), "payment_request.refunded", payment.ID, map[string]any{
+		"reference":    payment.Reference,
+		"status":       models.PaymentStatusCancelled,
+		"amount_cents": payment.AmountCents,
+		"refunded_at":  time.Now().UTC().Format(time.RFC3339),
+	})
+	observability.LogEvent("payment_refunded", map[string]any{
+		"payment_id":   payment.ID,
+		"reference":    payment.Reference,
+		"amount_cents": payment.AmountCents,
+		"actor":        actor,
+	})
+
+	http.Redirect(w, r, "/admin/dashboard", http.StatusFound)
+}
+
+func (a *App) AdminRefundPaymentPage(w http.ResponseWriter, r *http.Request) {
+	paymentID := strings.TrimSpace(chi.URLParam(r, "paymentID"))
+	if paymentID == "" {
+		http.Error(w, "payment id is required", http.StatusBadRequest)
+		return
+	}
+	payment, err := a.Store.GetPaymentRequestByID(r.Context(), paymentID)
+	if err != nil {
+		http.Error(w, "payment not found", http.StatusNotFound)
+		return
+	}
+	a.render(w, "admin_refund.html", adminRefundPageData{Payment: payment, CSRFField: csrf.TemplateField(r)})
 }
 
 func (a *App) AdminWebhooksPage(w http.ResponseWriter, r *http.Request) {

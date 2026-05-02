@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DPG Pay Refund</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <main class="mx-auto max-w-xl px-4 py-8">
+    <a href="/admin/dashboard" class="text-sm text-cyan-700 underline">Back to dashboard</a>
+    <h1 class="mt-2 text-2xl font-bold">Refund payment</h1>
+    <p class="mt-2 text-sm text-slate-600">Reference: {{.Payment.Reference}}</p>
+    <p class="text-sm text-slate-600">Amount: {{fmtCents .Payment.AmountCents .Payment.Currency}}</p>
+    <p class="text-sm text-slate-600">Current status: {{.Payment.Status}}</p>
+
+    <form class="mt-4 rounded border border-slate-200 bg-white p-4" method="post" action="/admin/payment-requests/{{.Payment.ID}}/refund">
+      {{.CSRFField}}
+      <p class="text-sm text-slate-700">This posts a reversal ledger entry and marks the payment as CANCELLED.</p>
+      <button class="mt-4 rounded bg-rose-600 px-4 py-2 text-sm font-semibold text-white">Confirm refund</button>
+    </form>
+  </main>
+</body>
+</html>

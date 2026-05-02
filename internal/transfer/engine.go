@@ -12,6 +12,7 @@ import (
 	"dpg-pay/internal/ledger"
 	"dpg-pay/internal/models"
 	"dpg-pay/internal/notify"
+	"dpg-pay/internal/observability"
 )
 
 type Rail interface {
@@ -82,6 +83,20 @@ func (e *Engine) processAwaiting(ctx context.Context) {
 }
 
 func (e *Engine) processOne(ctx context.Context, p models.PaymentRequest) error {
+	if time.Now().UTC().After(p.DueDate.UTC()) {
+		err := e.store.ExpireAwaitingTransfer(ctx, p.ID, p.AmountCents)
+		if err == nil {
+			_ = e.store.CreateAuditLog(ctx, "PAYMENT_EXPIRED", "transfer-engine", p.ID, `{"reason":"expired_before_transfer"}`)
+			_ = e.store.EnqueueWebhook(ctx, "payment_request.expired", p.ID, map[string]any{
+				"reference":  p.Reference,
+				"status":     models.PaymentStatusExpired,
+				"expired_at": time.Now().UTC().Format(time.RFC3339),
+			})
+			observability.LogEvent("payment_expired", map[string]any{"payment_id": p.ID, "reference": p.Reference})
+		}
+		return nil
+	}
+
 	success, err := e.rail.Process(ctx, p)
 	if err != nil {
 		return err
@@ -93,8 +108,13 @@ func (e *Engine) processOne(ctx context.Context, p models.PaymentRequest) error 
 			}
 			log.Printf("[SIMULATED] payment %s ledger posting already applied, continuing status update", p.ID)
 		}
-		if err := e.store.UpdatePaymentStatus(ctx, p.ID, models.PaymentStatusAwaitingTransfer, models.PaymentStatusSettled); err != nil {
+		changed, err := e.store.MarkPaymentSettledIdempotent(ctx, p.ID)
+		if err != nil {
 			return err
+		}
+		if !changed {
+			observability.LogEvent("payment_already_processed", map[string]any{"payment_id": p.ID, "reference": p.Reference})
+			return nil
 		}
 		_ = e.store.CreateAuditLog(ctx, "PAYMENT_SETTLED", "transfer-engine", p.ID, `{"mode":"SIMULATED"}`)
 		_ = e.store.EnqueueWebhook(ctx, "payment_request.settled", p.ID, map[string]any{
@@ -102,6 +122,7 @@ func (e *Engine) processOne(ctx context.Context, p models.PaymentRequest) error 
 			"status":     models.PaymentStatusSettled,
 			"settled_at": time.Now().UTC().Format(time.RFC3339),
 		})
+		observability.LogEvent("payment_settled", map[string]any{"payment_id": p.ID, "reference": p.Reference, "amount_cents": p.AmountCents})
 		log.Printf("[SIMULATED] payment %s settled", p.ID)
 
 		_ = e.notify.Send([]string{e.adminEmail}, "DPG Pay: Payment settled", fmt.Sprintf("Payment %s settled for %d cents", p.Reference, p.AmountCents))
@@ -120,6 +141,7 @@ func (e *Engine) processOne(ctx context.Context, p models.PaymentRequest) error 
 		"retry":     newRetry,
 		"failed_at": time.Now().UTC().Format(time.RFC3339),
 	})
+	observability.LogEvent("payment_failed", map[string]any{"payment_id": p.ID, "reference": p.Reference, "retry": newRetry})
 	log.Printf("[SIMULATED] payment %s failed on retry %d", p.ID, newRetry)
 
 	_ = e.notify.Send([]string{e.adminEmail}, "DPG Pay: Transfer failed", fmt.Sprintf("Payment %s failed (retry %d)", p.Reference, newRetry))

@@ -73,11 +73,11 @@
             <table class="w-full min-w-[800px] text-left">
               <thead>
                 <tr class="border-b border-slate-200 text-xs uppercase text-slate-500">
-                  <th class="px-3 py-2">Reference</th><th class="px-3 py-2">Payer</th><th class="px-3 py-2">Email</th><th class="px-3 py-2">Amount</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Created</th><th class="px-3 py-2">Pay link</th>
+                  <th class="px-3 py-2">Reference</th><th class="px-3 py-2">Payer</th><th class="px-3 py-2">Email</th><th class="px-3 py-2">Amount</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Created</th><th class="px-3 py-2">Pay link</th><th class="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody id="payment-rows">
-                {{range .Payments}}{{template "partials_payment_row.html" .}}{{else}}<tr><td colspan="7" class="px-3 py-4 text-sm text-slate-500">No payment requests found.</td></tr>{{end}}
+                {{range .Payments}}{{template "partials_payment_row.html" .}}{{else}}<tr><td colspan="8" class="px-3 py-4 text-sm text-slate-500">No payment requests found.</td></tr>{{end}}
               </tbody>
             </table>
           </div>
@@ -102,7 +102,6 @@
           <input name="amount_cents" required type="number" min="1" placeholder="Amount in cents" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
           <input name="currency" value="ZAR" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
           <input name="description" placeholder="Description" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
-          <input name="idempotency_key" placeholder="Idempotency key (optional but recommended)" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
           <input name="due_date" required type="date" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
           <button class="w-full rounded bg-cyan-500 px-3 py-2 text-sm font-semibold text-white">Create</button>
         </form>
