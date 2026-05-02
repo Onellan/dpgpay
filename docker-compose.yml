@@ -37,6 +37,17 @@ services:
         else
           echo ".env already exists; leaving it unchanged"
         fi
+
+        # Ensure CSRF key exists and is not empty.
+        if ! grep -Eq '^CSRF_AUTH_KEY=.+$' .env 2>/dev/null; then
+          csrf_key="$(tr -d '-' < /proc/sys/kernel/random/uuid)$(tr -d '-' < /proc/sys/kernel/random/uuid)"
+          if grep -q '^CSRF_AUTH_KEY=' .env 2>/dev/null; then
+            sed -i "s|^CSRF_AUTH_KEY=.*$|CSRF_AUTH_KEY=$${csrf_key}|" .env
+          else
+            printf '\nCSRF_AUTH_KEY=%s\n' "$${csrf_key}" >> .env
+          fi
+          echo "Generated CSRF_AUTH_KEY in .env"
+        fi
     volumes:
       - ./:/workspace
     restart: "no"

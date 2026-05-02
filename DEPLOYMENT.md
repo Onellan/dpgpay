@@ -23,7 +23,7 @@ The GitHub Actions CI pipeline:
 ### Image Registry
 
 Images are automatically pushed to:
-```
+```text
 ghcr.io/<github-owner>/<repository-name>:<tag>
 ```
 
@@ -63,6 +63,20 @@ PORT=18231
 CSRF_AUTH_KEY=<generate-random-key>
 ```
 
+Generate `CSRF_AUTH_KEY` manually:
+
+```bash
+openssl rand -hex 32
+```
+
+If `openssl` is unavailable:
+
+```bash
+cat /proc/sys/kernel/random/uuid | tr -d '-'; cat /proc/sys/kernel/random/uuid | tr -d '-'; echo
+```
+
+Then paste the value into `.env` as `CSRF_AUTH_KEY=...` and keep it stable across restarts.
+
 When `BASE_URL` is blank, the app derives it from the request host and forwarded proto headers, which is usually the right default in production.
 
 #### 3. Start the service
@@ -71,7 +85,7 @@ docker compose up -d
 ```
 
 #### 4. Access the application
-```
+```text
 http://localhost:18231
 ```
 

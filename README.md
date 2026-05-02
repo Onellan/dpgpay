@@ -70,7 +70,27 @@ If `.env.example` is missing, Docker Compose generates `.env` from built-in safe
 Defaults are runnable out of the box. You can change `ADMIN_EMAIL` and any other settings later in `.env` and restart.
 If `BASE_URL` is left blank, DPG Pay derives it from the incoming request host, which is safer for prebuilt-image production deployments.
 
-3. Access DPG Pay:
+3. Set `CSRF_AUTH_KEY` manually in `.env` (recommended before first production run):
+
+```bash
+openssl rand -hex 32
+```
+
+If `openssl` is unavailable, use:
+
+```bash
+cat /proc/sys/kernel/random/uuid | tr -d '-'; cat /proc/sys/kernel/random/uuid | tr -d '-'; echo
+```
+
+Copy the generated value into `.env`:
+
+```env
+CSRF_AUTH_KEY=<paste-generated-value>
+```
+
+Keep this value stable. Changing it invalidates in-flight CSRF tokens and may require users to refresh or re-authenticate.
+
+4. Access DPG Pay:
 
 - `http://<pi-ip>:18231`
 
