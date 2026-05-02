@@ -1,12 +1,58 @@
 services:
+  env-bootstrap:
+    image: alpine:3.20
+    container_name: dpg-pay-env-bootstrap
+    working_dir: /workspace
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f .env ]; then
+          if [ -f .env.example ]; then
+            cp .env.example .env
+            echo "Created .env from .env.example"
+          else
+            printf '%s\n' \
+              'ADMIN_USERNAME=admin' \
+              'ADMIN_PASSWORD_BCRYPT=$$2a$$12$$lR7tA9vi0PguursY4jay6.T0iOwyW58zwakCybfkAEp8djfXF1xXO' \
+              'ADMIN_EMAIL=admin@dpgpay.local' \
+              'SMTP_HOST=' \
+              'SMTP_PORT=' \
+              'SMTP_USER=' \
+              'SMTP_PASS=' \
+              'SMTP_FROM=' \
+              'BASE_URL=http://localhost:18231' \
+              'DB_PATH=/data/dpgpay.db' \
+              'EFT_SIMULATION_MODE=true' \
+              'EFT_ACCOUNT_NAME=DPG Pay Demo' \
+              'EFT_BANK_NAME=Demo Bank' \
+              'EFT_ACCOUNT_NUMBER=123456789012' \
+              'EFT_BRANCH_CODE=' \
+              'CSRF_AUTH_KEY=' \
+              'WEBHOOK_ENDPOINT_URL=' \
+              'WEBHOOK_SIGNING_SECRET=' \
+              'PORT=18231' > .env
+            echo "Created .env from built-in defaults"
+          fi
+        else
+          echo ".env already exists; leaving it unchanged"
+        fi
+    volumes:
+      - ./:/workspace
+    restart: "no"
+
   dpg-pay:
+    depends_on:
+      env-bootstrap:
+        condition: service_completed_successfully
     build:
       context: .
       dockerfile: Dockerfile
     container_name: dpg-pay
     user: "0:0"
     env_file:
-      - .env
+      - path: .env
+        required: false
     ports:
       - "0.0.0.0:18231:18231"
     volumes:

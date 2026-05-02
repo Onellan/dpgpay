@@ -45,33 +45,27 @@ DPG Pay is a self-hosted, internal ledger-based payment processor. It accepts pa
 
 ## Setup
 
-1. Create an env file:
-
-```bash
-cp .env.example .env
-```
-
-2. Fill required values in `.env`:
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD_BCRYPT`
-- `BASE_URL`
-- `DB_PATH` (in containers: `/data/dpgpay.db`)
-- `EFT_ACCOUNT_NAME`
-- `EFT_BANK_NAME`
-- `EFT_ACCOUNT_NUMBER`
-- `EFT_BRANCH_CODE` (optional)
-- `WEBHOOK_ENDPOINT_URL` (optional, enables outbound webhook delivery)
-- `WEBHOOK_SIGNING_SECRET` (optional but recommended)
-
-3. Build and run:
+1. Build and run:
 
 ```bash
 docker compose up -d --build
 ```
 
-4. Access DPG Pay:
+This now auto-creates `.env` from `.env.example` on first run if it does not exist.
+If `.env.example` is missing, Docker Compose generates `.env` from built-in safe defaults.
+
+2. (Optional) Update `.env` values after first boot.
+
+Defaults are runnable out of the box. You can change `ADMIN_EMAIL` and any other settings later in `.env` and restart.
+
+3. Access DPG Pay:
 
 - `http://<pi-ip>:18231`
+
+Default first-run admin credentials:
+
+- Username: `admin`
+- Password: `admin123`
 
 ## DNS setup
 
